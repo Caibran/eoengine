@@ -2227,30 +2227,103 @@ void Character::GiveCraftingEXP(int amount)
 
 int Character::CalculateCraftingEXPReward(int crafted_item_id)
 {
-	// Base crafting EXP reward calculation
-	// You can customize this based on item rarity, level requirements, etc.
-	// For now, using a simple formula based on item ID
-	int base_exp = 70; // Base EXP as shown in the example
+	// Check for item-specific crafting EXP in crafting.ini
+	std::string item_key = util::to_string(crafted_item_id) + ".crafting_exp";
+	auto crafting_exp_setting = this->world->crafting_config.find(item_key);
 	
-	// Could add item-specific bonuses here based on crafted_item_id
-	// For example: rare items give more EXP
+	if (crafting_exp_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(crafting_exp_setting->second);
+	}
 	
-	return base_exp;
+	// Use default crafting EXP if item-specific setting not found
+	auto default_setting = this->world->crafting_config.find("DefaultCraftingEXP");
+	if (default_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(default_setting->second);
+	}
+	
+	// Fallback to hardcoded value if config not found
+	return 70;
 }
 
 int Character::CalculateRegularEXPReward(int crafted_item_id)
 {
-	// Regular EXP reward calculation
-	// Base amount as shown in the example
-	int base_exp = 450;
+	// Check for item-specific regular EXP in crafting.ini
+	std::string item_key = util::to_string(crafted_item_id) + ".regular_exp";
+	auto regular_exp_setting = this->world->crafting_config.find(item_key);
 	
-	// Could add item-specific bonuses here based on crafted_item_id
+	if (regular_exp_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(regular_exp_setting->second);
+	}
 	
-	return base_exp;
+	// Use default regular EXP if item-specific setting not found
+	auto default_setting = this->world->crafting_config.find("DefaultRegularEXP");
+	if (default_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(default_setting->second);
+	}
+	
+	// Fallback to hardcoded value if config not found
+	return 450;
+}
+
+std::string Character::ParseCraftingMessage(const std::string& message, const std::string& item_name, int crafting_exp, int regular_exp)
+{
+	std::string result = message;
+	
+	// Replace all variables in the message
+	size_t pos = 0;
+	while ((pos = result.find("{ITEM_NAME}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 11, item_name);
+		pos += item_name.length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{CRAFTING_EXP}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 14, util::to_string(crafting_exp));
+		pos += util::to_string(crafting_exp).length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{REGULAR_EXP}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 13, util::to_string(regular_exp));
+		pos += util::to_string(regular_exp).length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{PLAYER_NAME}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 13, this->real_name);
+		pos += this->real_name.length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{CRAFTING_LEVEL}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 16, util::to_string(this->crafting_level));
+		pos += util::to_string(this->crafting_level).length();
+	}
+	
+	return result;
 }
 
 void Character::AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, int regular_exp_reward)
 {
+	// Check if announcements are enabled
+	auto announcements_enabled = this->world->crafting_config.find("EnableAnnouncements");
+	if (announcements_enabled != this->world->crafting_config.end())
+	{
+		if (static_cast<std::string>(announcements_enabled->second) == "false")
+		{
+			return; // Announcements disabled
+		}
+	}
+	
 	// Get item name from EIF data
 	std::string item_name = "Unknown Item";
 	if (crafted_item_id > 0 && crafted_item_id < static_cast<int>(this->world->eif->data.size()))
@@ -2258,9 +2331,33 @@ void Character::AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, i
 		item_name = this->world->eif->data[crafted_item_id].name;
 	}
 	
-	// Create announcement message
-	std::string announcement = util::sprintf("[Crafting] You have successfully crafted %s, you have earned %d Crafting EXP, and %d EXP!",
-		item_name.c_str(), crafting_exp_reward, regular_exp_reward);
+	// Check for item-specific announcement message
+	std::string item_key = util::to_string(crafted_item_id) + ".announcement";
+	auto item_announcement = this->world->crafting_config.find(item_key);
+	
+	std::string announcement_template;
+	if (item_announcement != this->world->crafting_config.end())
+	{
+		// Use item-specific announcement
+		announcement_template = static_cast<std::string>(item_announcement->second);
+	}
+	else
+	{
+		// Use default announcement format
+		auto default_format = this->world->crafting_config.find("AnnouncementFormat");
+		if (default_format != this->world->crafting_config.end())
+		{
+			announcement_template = static_cast<std::string>(default_format->second);
+		}
+		else
+		{
+			// Fallback to hardcoded message
+			announcement_template = "[Crafting] You have successfully crafted {ITEM_NAME}, you have earned {CRAFTING_EXP} Crafting EXP, and {REGULAR_EXP} EXP!";
+		}
+	}
+	
+	// Parse the message template with variables
+	std::string announcement = ParseCraftingMessage(announcement_template, item_name, crafting_exp_reward, regular_exp_reward);
 	
 	this->ServerMsg(announcement);
 }

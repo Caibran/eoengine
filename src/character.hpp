@@ -387,6 +387,7 @@ class Character : public Command_Source
 		int CalculateCraftingEXPReward(int crafted_item_id);
 		int CalculateRegularEXPReward(int crafted_item_id);
 		void AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, int regular_exp_reward);
+		std::string ParseCraftingMessage(const std::string& message, const std::string& item_name, int crafting_exp, int regular_exp);
 
 		~Character();
 

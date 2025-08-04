@@ -118,6 +118,7 @@ class World
 		Config home_config;
 		Config skills_config;
 		Config speech_config;
+		Config crafting_config;
 
 		I18N i18n;
 

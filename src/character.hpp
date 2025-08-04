@@ -275,6 +275,8 @@ class Character : public Command_Source
 
 		std::list<Character_Item> inventory;
 		std::list<Character_Item> bank;
+		std::list<Character_Item> bag;
+		int baglevel;
 		std::array<int, 15> paperdoll;
 		std::array<int, 15> cosmetic_paperdoll;
 		std::list<Character_Spell> spells;

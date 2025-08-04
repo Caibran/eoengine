@@ -385,7 +385,7 @@ Character::Character(std::string name, World *world)
 
 	Database_Result res = this->world->db->Query("SELECT `name`, `title`, `home`, `fiance`, `partner`, `admin`, `class`, `gender`, `race`, `hairstyle`, `haircolor`,"
 		"`map`, `x`, `y`, `direction`, `level`, `exp`, `hp`, `tp`, `str`, `int`, `wis`, `agi`, `con`, `cha`, `statpoints`, `skillpoints`, "
-		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `crafting_level`, `crafting_exp`, `crafting_exp_tnl`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
+		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `crafting_level`, `crafting_exp`, `crafting_exp_tnl`, `baglevel`, `inventory`, `bank`, `bag`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
 		"`nointeract` FROM `characters` WHERE `name` = '$'", name.c_str());
 	std::unordered_map<std::string, util::variant> row = res.front();
 
@@ -479,8 +479,11 @@ Character::Character(std::string name, World *world)
 
 	this->usage = GetRow<int>(row, "usage");
 
+	this->baglevel = GetRow<int>(row, "baglevel");
+
 	this->inventory = ItemUnserialize(row["inventory"]);
 	this->bank = ItemUnserialize(row["bank"]);
+	this->bag = ItemUnserialize(row["bag"]);
 	this->paperdoll = DollUnserialize(row["paperdoll"]);
 	this->spells = SpellUnserialize(row["spells"]);
 
@@ -2163,12 +2166,12 @@ void Character::Save()
 	this->world->db->Query("UPDATE `characters` SET `title` = '$', `home` = '$', `fiance` = '$', `partner` = '$', `admin` = #, `class` = #, `gender` = #, `race` = #, "
 		"`hairstyle` = #, `haircolor` = #, `map` = #, `x` = #, `y` = #, `direction` = #, `level` = #, `exp` = #, `hp` = #, `tp` = #, "
 		"`str` = #, `int` = #, `wis` = #, `agi` = #, `con` = #, `cha` = #, `statpoints` = #, `skillpoints` = #, `karma` = #, `sitting` = #, `hidden` = #, "
-		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `crafting_level` = #, `crafting_exp` = #, `crafting_exp_tnl` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
+		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `crafting_level` = #, `crafting_exp` = #, `crafting_exp_tnl` = #, `baglevel` = #, `inventory` = '$', `bank` = '$', `bag` = '$', `paperdoll` = '$', "
 		"`spells` = '$', `guild` = '$', `guild_rank` = #, `guild_rank_string` = '$', `quest` = '$', `vars` = '$' WHERE `name` = '$'",
 		this->title.c_str(), this->home.c_str(), this->fiance.c_str(), this->partner.c_str(), int(this->admin), this->clas, int(this->gender), int(this->race),
 		this->hairstyle, this->haircolor, this->mapid, this->x, this->y, int(this->direction), this->level, this->exp, this->hp, this->tp,
 		this->str, this->intl, this->wis, this->agi, this->con, this->cha, this->statpoints, this->skillpoints, this->karma, int(this->sitting), int(this->hidden),
-		nointeract, this->bankmax, this->goldbank, this->Usage(), this->crafting_level, this->crafting_exp, this->crafting_exp_tnl, ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(),
+		nointeract, this->bankmax, this->goldbank, this->Usage(), this->crafting_level, this->crafting_exp, this->crafting_exp_tnl, this->baglevel, ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(), ItemSerialize(this->bag).c_str(),
 		DollSerialize(this->paperdoll).c_str(), SpellSerialize(this->spells).c_str(), (this->guild ? this->guild->tag.c_str() : ""),
 		this->guild_rank, this->guild_rank_string.c_str(), quest_data.c_str(), "", this->real_name.c_str());
 }

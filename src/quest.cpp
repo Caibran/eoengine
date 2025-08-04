@@ -111,6 +111,8 @@ static void validate_state(const EOPlus::Quest& quest, const std::string& name, 
 		{"givestat", 2},
 		{"removestat", 2},
 
+		{"givebaglevel", 1},
+
 		{"roll", 1},
 	};
 
@@ -146,6 +148,8 @@ static void validate_state(const EOPlus::Quest& quest, const std::string& name, 
 		{"citizenof", 1},
 
 		{"rolled", {1, 2}},
+
+		{"hasbagspace", 1},
 
 		// Only needed until expression support is added
 		{"statis", 2},
@@ -754,6 +758,15 @@ bool Quest_Context::DoAction(const EOPlus::Action& action)
 		if (!modify_stat(stat, [value](int x) { return x - value; }, this->character))
 			throw EOPlus::Runtime_Error("Unknown stat: " + stat);
 	}
+	else if (function_name == "givebaglevel")
+	{
+		int levels = int(action.expr.args[0]);
+		this->character->baglevel += levels;
+		
+		// Ensure baglevel doesn't go below 1
+		if (this->character->baglevel < 1)
+			this->character->baglevel = 1;
+	}
 	else if (function_name == "roll")
 	{
 		this->progress["r"] = util::rand(1, int(action.expr.args[0]));
@@ -870,6 +883,15 @@ bool Quest_Context::CheckRule(const EOPlus::Expression& expr)
 			return roll >= int(expr.args[0])
 			    && roll <= int(expr.args[1]);
 		}
+	}
+	else if (function_name == "hasbagspace")
+	{
+		// Calculate current bag capacity: 3 base + (baglevel - 1) additional slots
+		std::size_t bagmax = 3 + (this->character->baglevel - 1);
+		std::size_t required_space = int(expr.args[0]);
+		std::size_t available_space = bagmax - this->character->bag.size();
+		
+		return available_space >= required_space;
 	}
 	else if (function_name == "statis")
 	{

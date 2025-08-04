@@ -592,8 +592,10 @@ void World::DumpToFile(const std::string& fileName)
 		nextC["bankmax"] = c->bankmax;
 		nextC["goldbank"] = c->goldbank;
 		nextC["usage"] = c->usage;
+		nextC["baglevel"] = c->baglevel;
 		nextC["inventory"] = ItemSerialize(c->inventory);
 		nextC["bank"] = ItemSerialize(c->bank);
+		nextC["bag"] = ItemSerialize(c->bag);
 		nextC["paperdoll"] = DollSerialize(c->paperdoll);
 		nextC["spells"] = SpellSerialize(c->spells);
 		nextC["guild"] = c->guild ? c->guild->tag : "";
@@ -727,8 +729,8 @@ void World::RestoreFromDump(const std::string& fileName)
 			{
 				dbRes = this->db->Query("INSERT INTO `characters` (`name`, `title`, `account`, `home`, `fiance`, `partner`, `class`, `gender`, `race`, "
 					"`hairstyle`, `haircolor`, `map`, `x`, `y`, `direction`, `level`, `admin`, `exp`, `hp`, `tp`, `str`, `int`, `wis`, `agi`, `con`, `cha`, `statpoints`, `skillpoints`, `karma`, `sitting`, `hidden`, "
-					"`nointeract`, `bankmax`, `goldbank`, `usage`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`) "
-					"VALUES ('$', '$', '$', '$', '$', '$', #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, '$', '$', '$', '$', '$', #, '$', '$')",
+					"`nointeract`, `bankmax`, `goldbank`, `usage`, `baglevel`, `inventory`, `bank`, `bag`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`) "
+					"VALUES ('$', '$', '$', '$', '$', '$', #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, #, '$', '$', '$', '$', '$', #, '$', '$')",
 					charName.c_str(), c["title"].get<std::string>().c_str(), c["account"].get<std::string>().c_str(),
 					c["home"].get<std::string>().c_str(), c["fiance"].get<std::string>().c_str(), c["partner"].get<std::string>().c_str(),
 					c["class"].get<int>(), c["gender"].get<int>(), c["race"].get<int>(),
@@ -736,8 +738,8 @@ void World::RestoreFromDump(const std::string& fileName)
 					c["level"].get<int>(), c["admin"].get<int>(), c["exp"].get<int>(), c["hp"].get<int>(), c["tp"].get<int>(),
 					c["str"].get<int>(), c["intl"].get<int>(), c["wis"].get<int>(), c["agi"].get<int>(), c["con"].get<int>(), c["cha"].get<int>(),
 					c["statpoints"].get<int>(), c["skillpoints"].get<int>(), c["karma"].get<int>(), c["sitting"].get<int>(), c["hidden"].get<int>(),
-					c["nointeract"].get<int>(), c["bankmax"].get<int>(), c["goldbank"].get<int>(), c["usage"].get<int>(),
-					c["inventory"].get<std::string>().c_str(), c["bank"].get<std::string>().c_str(), c["paperdoll"].get<std::string>().c_str(),
+					c["nointeract"].get<int>(), c["bankmax"].get<int>(), c["goldbank"].get<int>(), c["usage"].get<int>(), c.value("baglevel", 1),
+					c["inventory"].get<std::string>().c_str(), c["bank"].get<std::string>().c_str(), c.value("bag", std::string("")).c_str(), c["paperdoll"].get<std::string>().c_str(),
 					c["spells"].get<std::string>().c_str(), c["guild"].get<std::string>().c_str(),
 					c["guildrank"].get<int>(), c["guildrank_str"].get<std::string>().c_str(), c["quest"].get<std::string>().c_str());
 			}
@@ -747,7 +749,7 @@ void World::RestoreFromDump(const std::string& fileName)
 				dbRes = this->db->Query("UPDATE `characters` SET `title` = '$', `home` = '$', `fiance` = '$', `partner` = '$', `class` = #, `gender` = #, `race` = #, "
 					"`hairstyle` = #, `haircolor` = #, `map` = #, `x` = #, `y` = #, `direction` = #, `level` = #, `admin` = #, `exp` = #, `hp` = #, `tp` = #, "
 					"`str` = #, `int` = #, `wis` = #, `agi` = #, `con` = #, `cha` = #, `statpoints` = #, `skillpoints` = #, `karma` = #, `sitting` = #, `hidden` = #, "
-					"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
+					"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `baglevel` = #, `inventory` = '$', `bank` = '$', `bag` = '$', `paperdoll` = '$', "
 					"`spells` = '$', `guild` = '$', `guild_rank` = #, `guild_rank_string` = '$', `quest` = '$' "
 					"WHERE `name` = '$'",
 					c["title"].get<std::string>().c_str(), c["home"].get<std::string>().c_str(), c["fiance"].get<std::string>().c_str(), c["partner"].get<std::string>().c_str(),
@@ -756,8 +758,8 @@ void World::RestoreFromDump(const std::string& fileName)
 					c["level"].get<int>(), c["admin"].get<int>(), c["exp"].get<int>(), c["hp"].get<int>(), c["tp"].get<int>(),
 					c["str"].get<int>(), c["intl"].get<int>(), c["wis"].get<int>(), c["agi"].get<int>(), c["con"].get<int>(), c["cha"].get<int>(),
 					c["statpoints"].get<int>(), c["skillpoints"].get<int>(), c["karma"].get<int>(), c["sitting"].get<int>(), c["hidden"].get<int>(),
-					c["nointeract"].get<int>(), c["bankmax"].get<int>(), c["goldbank"].get<int>(), c["usage"].get<int>(),
-					c["inventory"].get<std::string>().c_str(), c["bank"].get<std::string>().c_str(), c["paperdoll"].get<std::string>().c_str(),
+					c["nointeract"].get<int>(), c["bankmax"].get<int>(), c["goldbank"].get<int>(), c["usage"].get<int>(), c.value("baglevel", 1),
+					c["inventory"].get<std::string>().c_str(), c["bank"].get<std::string>().c_str(), c.value("bag", std::string("")).c_str(), c["paperdoll"].get<std::string>().c_str(),
 					c["spells"].get<std::string>().c_str(), c["guild"].get<std::string>().c_str(),
 					c["guildrank"].get<int>(), c["guildrank_str"].get<std::string>().c_str(), c["quest"].get<std::string>().c_str(),
 					charName.c_str());
@@ -1639,7 +1641,7 @@ Character *World::CreateCharacter(Player *player, std::string name, Gender gende
 		startmapval = buffer;
 	}
 
-	this->db->Query("INSERT INTO `characters` (`name`, `account`, `gender`, `hairstyle`, `haircolor`, `race`, `inventory`, `bank`, `paperdoll`, `spells`, `quest`, `vars`@) VALUES ('$','$',#,#,#,#,'$','','$','$','',''@)",
+	this->db->Query("INSERT INTO `characters` (`name`, `account`, `gender`, `hairstyle`, `haircolor`, `race`, `baglevel`, `inventory`, `bank`, `bag`, `paperdoll`, `spells`, `quest`, `vars`@) VALUES ('$','$',#,#,#,#,1,'$','','','$','$','',''@)",
 		startmapinfo.c_str(), name.c_str(), player->username.c_str(), gender, hairstyle, haircolor, race,
 		static_cast<std::string>(this->config["StartItems"]).c_str(), static_cast<std::string>(gender?this->config["StartEquipMale"]:this->config["StartEquipFemale"]).c_str(),
 		static_cast<std::string>(this->config["StartSpells"]).c_str(), startmapval.c_str());

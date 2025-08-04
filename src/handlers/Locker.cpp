@@ -43,7 +43,7 @@ static PacketBuilder add_common(Character *character, short item, int amount)
 	return reply;
 }
 
-// Placing an item in a bank locker
+// Placing an item in a bank locker or bag  
 void Locker_Add(Character *character, PacketReader &reader)
 {
 	if (character->trading) return;
@@ -57,6 +57,81 @@ void Locker_Add(Character *character, PacketReader &reader)
 	if (amount <= 0) return;
 	if (character->HasItem(item) < amount) return;
 
+	// Check if this is a bag operation (special coordinates 255, 255)
+	if (x == 255 && y == 255)
+	{
+		// Bag operation
+		std::size_t bagmax = 3 + (character->baglevel - 1);
+
+		UTIL_IFOREACH(character->bag, it)
+		{
+			if (it->id == item)
+			{
+				if (it->amount + amount < 0)
+				{
+					return;
+				}
+
+				amount = std::min<int>(amount, static_cast<int>(character->world->config["MaxBank"]) - it->amount);
+
+				it->amount += amount;
+
+				character->DelItem(item, amount);
+				character->CalculateStats();
+
+				PacketBuilder reply(PACKET_LOCKER, PACKET_REPLY, 8 + character->bag.size() * 5);
+				reply.AddShort(item);
+				reply.AddInt(character->HasItem(item));
+				reply.AddChar(static_cast<unsigned char>(character->weight));
+				reply.AddChar(static_cast<unsigned char>(character->maxweight));
+
+				UTIL_FOREACH(character->bag, bagitem)
+				{
+					reply.AddShort(bagitem.id);
+					reply.AddThree(bagitem.amount);
+				}
+
+				character->Send(reply);
+				return;
+			}
+		}
+
+		if (character->bag.size() >= bagmax)
+		{
+			PacketBuilder reply(PACKET_LOCKER, PACKET_SPEC);
+			reply.AddChar(static_cast<unsigned char>(bagmax));
+			character->Send(reply);
+			return;
+		}
+
+		amount = std::min<int>(amount, static_cast<int>(character->world->config["MaxBank"]));
+
+		Character_Item newitem;
+		newitem.id = item;
+		newitem.amount = amount;
+
+		character->bag.push_back(newitem);
+
+		character->DelItem(item, amount);
+		character->CalculateStats();
+
+		PacketBuilder reply(PACKET_LOCKER, PACKET_REPLY, 8 + character->bag.size() * 5);
+		reply.AddShort(item);
+		reply.AddInt(character->HasItem(item));
+		reply.AddChar(static_cast<unsigned char>(character->weight));
+		reply.AddChar(static_cast<unsigned char>(character->maxweight));
+
+		UTIL_FOREACH(character->bag, bagitem)
+		{
+			reply.AddShort(bagitem.id);
+			reply.AddThree(bagitem.amount);
+		}
+
+		character->Send(reply);
+		return;
+	}
+
+	// Normal locker operation
 	std::size_t lockermax = static_cast<int>(character->world->config["BaseBankSize"]) + character->bankmax * static_cast<int>(character->world->config["BankSizeStep"]);
 
 	if (util::path_length(character->x, character->y, x, y) <= 1)
@@ -104,7 +179,7 @@ void Locker_Add(Character *character, PacketReader &reader)
 	}
 }
 
-// Taking an item from a bank locker
+// Taking an item from a bank locker or bag
 void Locker_Take(Character *character, PacketReader &reader)
 {
 	if (character->trading) return;
@@ -115,6 +190,45 @@ void Locker_Take(Character *character, PacketReader &reader)
 
 	// TODO: Limit number of items withdrawn to under weight
 
+	// Check if this is a bag operation (special coordinates 255, 255)
+	if (x == 255 && y == 255)
+	{
+		// Bag operation
+		UTIL_IFOREACH(character->bag, it)
+		{
+			if (it->id == item)
+			{
+				int amount = it->amount;
+				int taken = character->CanHoldItem(it->id, amount);
+
+				character->AddItem(item, taken);
+				character->CalculateStats();
+
+				PacketBuilder reply(PACKET_LOCKER, PACKET_GET, 7 + character->bag.size() * 5);
+				reply.AddShort(item);
+				reply.AddThree(taken);
+				reply.AddChar(static_cast<unsigned char>(character->weight));
+				reply.AddChar(static_cast<unsigned char>(character->maxweight));
+
+				it->amount -= taken;
+
+				if (it->amount <= 0)
+					character->bag.erase(it);
+
+				UTIL_FOREACH(character->bag, bagitem)
+				{
+					reply.AddShort(bagitem.id);
+					reply.AddThree(bagitem.amount);
+				}
+				character->Send(reply);
+
+				break;
+			}
+		}
+		return;
+	}
+
+	// Normal locker operation
 	if (util::path_length(character->x, character->y, x, y) <= 1)
 	{
 		if (character->map->GetSpec(x, y) == Map_Tile::BankVault)

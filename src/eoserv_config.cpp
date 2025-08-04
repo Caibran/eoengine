@@ -117,6 +117,8 @@ void eoserv_config_validate_config(Config& config)
 	eoserv_config_default(config, "GuildMaxWidth"      , 180);
 	eoserv_config_default(config, "GlobalPK"           , false);
 	eoserv_config_default(config, "PKExcept"           , "");
+	eoserv_config_default(config, "PKItemID"           , 0);
+	eoserv_config_default(config, "PKRewardXP"         , 0);
 	eoserv_config_default(config, "NPCChaseMode"       , 0);
 	eoserv_config_default(config, "NPCChaseDistance"   , 18);
 	eoserv_config_default(config, "NPCBoredTimer"      , 30);

@@ -49,6 +49,7 @@ void Shop_Create(Character *character, PacketReader &reader)
 
 				if (hasitems)
 				{
+					// Remove ingredients and add crafted item (existing functionality)
 					PacketBuilder reply(PACKET_SHOP, PACKET_CREATE, 4 + checkitem->ingredients.size() * 6);
 					reply.AddShort(item);
 					reply.AddChar(static_cast<unsigned char>(character->weight));
@@ -61,6 +62,42 @@ void Shop_Create(Character *character, PacketReader &reader)
 					}
 					character->AddItem(checkitem->id, 1);
 					character->Send(reply);
+
+					// Advanced Crafting System Integration
+					// 1. Calculate EXP rewards
+					int crafting_exp_reward = character->CalculateCraftingEXPReward(checkitem->id);
+					int regular_exp_reward = character->CalculateRegularEXPReward(checkitem->id);
+
+					// 2. Give crafting EXP and handle level ups
+					character->GiveCraftingEXP(crafting_exp_reward);
+
+					// 3. Give regular EXP (using existing quest system method)
+					bool level_up = false;
+					character->exp += regular_exp_reward;
+					character->exp = std::min(character->exp, int(character->world->config["MaxExp"]));
+
+					while (character->level < int(character->world->config["MaxLevel"])
+						&& character->exp >= character->world->exp_table[character->level+1])
+					{
+						character->level++;
+						level_up = true;
+						character->CalculateStats();
+					}
+
+					if (level_up)
+					{
+						PacketBuilder level_reply(PACKET_RECOVER, PACKET_REPLY, 7);
+						level_reply.AddInt(character->exp);
+						level_reply.AddShort(character->level);
+						level_reply.AddChar(character->statpoints);
+						character->Send(level_reply);
+					}
+
+					// 4. Send crafting announcement
+					character->AnnounceCrafting(checkitem->id, crafting_exp_reward, regular_exp_reward);
+
+					// 5. Save character data to database
+					character->Save();
 				}
 			}
 		}

@@ -399,6 +399,7 @@ void World::Initialize()
 		this->home_config.Read(this->config["HomeFile"]);
 		this->skills_config.Read(this->config["SkillsFile"]);
 		this->speech_config.Read(this->config["SpeechFile"]);
+		this->crafting_config.Read(this->config["CraftingFile"]);
 	}
 	catch (std::runtime_error &e)
 	{

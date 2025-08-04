@@ -385,7 +385,7 @@ Character::Character(std::string name, World *world)
 
 	Database_Result res = this->world->db->Query("SELECT `name`, `title`, `home`, `fiance`, `partner`, `admin`, `class`, `gender`, `race`, `hairstyle`, `haircolor`,"
 		"`map`, `x`, `y`, `direction`, `level`, `exp`, `hp`, `tp`, `str`, `int`, `wis`, `agi`, `con`, `cha`, `statpoints`, `skillpoints`, "
-		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
+		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `crafting_level`, `crafting_exp`, `crafting_exp_tnl`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
 		"`nointeract` FROM `characters` WHERE `name` = '$'", name.c_str());
 	std::unordered_map<std::string, util::variant> row = res.front();
 
@@ -414,6 +414,10 @@ Character::Character(std::string name, World *world)
 
 	this->level = GetRow<int>(row, "level");
 	this->exp = GetRow<int>(row, "exp");
+
+	this->crafting_level = GetRow<int>(row, "crafting_level");
+	this->crafting_exp = GetRow<int>(row, "crafting_exp");
+	this->crafting_exp_tnl = GetRow<int>(row, "crafting_exp_tnl");
 
 	this->hp = GetRow<int>(row, "hp");
 	this->tp = GetRow<int>(row, "tp");
@@ -2159,12 +2163,12 @@ void Character::Save()
 	this->world->db->Query("UPDATE `characters` SET `title` = '$', `home` = '$', `fiance` = '$', `partner` = '$', `admin` = #, `class` = #, `gender` = #, `race` = #, "
 		"`hairstyle` = #, `haircolor` = #, `map` = #, `x` = #, `y` = #, `direction` = #, `level` = #, `exp` = #, `hp` = #, `tp` = #, "
 		"`str` = #, `int` = #, `wis` = #, `agi` = #, `con` = #, `cha` = #, `statpoints` = #, `skillpoints` = #, `karma` = #, `sitting` = #, `hidden` = #, "
-		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
+		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `crafting_level` = #, `crafting_exp` = #, `crafting_exp_tnl` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
 		"`spells` = '$', `guild` = '$', `guild_rank` = #, `guild_rank_string` = '$', `quest` = '$', `vars` = '$' WHERE `name` = '$'",
 		this->title.c_str(), this->home.c_str(), this->fiance.c_str(), this->partner.c_str(), int(this->admin), this->clas, int(this->gender), int(this->race),
 		this->hairstyle, this->haircolor, this->mapid, this->x, this->y, int(this->direction), this->level, this->exp, this->hp, this->tp,
 		this->str, this->intl, this->wis, this->agi, this->con, this->cha, this->statpoints, this->skillpoints, this->karma, int(this->sitting), int(this->hidden),
-		nointeract, this->bankmax, this->goldbank, this->Usage(), ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(),
+		nointeract, this->bankmax, this->goldbank, this->Usage(), this->crafting_level, this->crafting_exp, this->crafting_exp_tnl, ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(),
 		DollSerialize(this->paperdoll).c_str(), SpellSerialize(this->spells).c_str(), (this->guild ? this->guild->tag.c_str() : ""),
 		this->guild_rank, this->guild_rank_string.c_str(), quest_data.c_str(), "", this->real_name.c_str());
 }
@@ -2192,6 +2196,170 @@ Character* Character::SourceCharacter()
 World* Character::SourceWorld()
 {
 	return this->world;
+}
+
+// Crafting system implementation
+void Character::GiveCraftingEXP(int amount)
+{
+	if (amount <= 0) return;
+	
+	this->crafting_exp += amount;
+	
+	// Level up logic - 100 exp per level + 50 exp bonus per level
+	while (this->crafting_level < 100 && this->crafting_exp >= this->crafting_exp_tnl)
+	{
+		this->crafting_exp -= this->crafting_exp_tnl;
+		this->crafting_level++;
+		
+		// Calculate next level requirement: 100 + (level * 50)
+		this->crafting_exp_tnl = 100 + (this->crafting_level * 50);
+		
+		// Send level up message
+		PacketBuilder reply(PACKET_RECOVER, PACKET_REPLY, 7);
+		reply.AddInt(this->crafting_exp);
+		reply.AddShort(this->crafting_level);
+		reply.AddChar(0); // Stat points (not used for crafting)
+		this->Send(reply);
+		
+		this->ServerMsg(this->world->i18n.Format("crafting_level_up", this->crafting_level));
+	}
+}
+
+int Character::CalculateCraftingEXPReward(int crafted_item_id)
+{
+	// Check for item-specific crafting EXP in crafting.ini
+	std::string item_key = util::to_string(crafted_item_id) + ".crafting_exp";
+	auto crafting_exp_setting = this->world->crafting_config.find(item_key);
+	
+	if (crafting_exp_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(crafting_exp_setting->second);
+	}
+	
+	// Use default crafting EXP if item-specific setting not found
+	auto default_setting = this->world->crafting_config.find("DefaultCraftingEXP");
+	if (default_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(default_setting->second);
+	}
+	
+	// Fallback to hardcoded value if config not found
+	return 70;
+}
+
+int Character::CalculateRegularEXPReward(int crafted_item_id)
+{
+	// Check for item-specific regular EXP in crafting.ini
+	std::string item_key = util::to_string(crafted_item_id) + ".regular_exp";
+	auto regular_exp_setting = this->world->crafting_config.find(item_key);
+	
+	if (regular_exp_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(regular_exp_setting->second);
+	}
+	
+	// Use default regular EXP if item-specific setting not found
+	auto default_setting = this->world->crafting_config.find("DefaultRegularEXP");
+	if (default_setting != this->world->crafting_config.end())
+	{
+		return static_cast<int>(default_setting->second);
+	}
+	
+	// Fallback to hardcoded value if config not found
+	return 450;
+}
+
+std::string Character::ParseCraftingMessage(const std::string& message, const std::string& item_name, int crafting_exp, int regular_exp)
+{
+	std::string result = message;
+	
+	// Replace all variables in the message
+	size_t pos = 0;
+	while ((pos = result.find("{ITEM_NAME}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 11, item_name);
+		pos += item_name.length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{CRAFTING_EXP}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 14, util::to_string(crafting_exp));
+		pos += util::to_string(crafting_exp).length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{REGULAR_EXP}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 13, util::to_string(regular_exp));
+		pos += util::to_string(regular_exp).length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{PLAYER_NAME}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 13, this->real_name);
+		pos += this->real_name.length();
+	}
+	
+	pos = 0;
+	while ((pos = result.find("{CRAFTING_LEVEL}", pos)) != std::string::npos)
+	{
+		result.replace(pos, 16, util::to_string(this->crafting_level));
+		pos += util::to_string(this->crafting_level).length();
+	}
+	
+	return result;
+}
+
+void Character::AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, int regular_exp_reward)
+{
+	// Check if announcements are enabled
+	auto announcements_enabled = this->world->crafting_config.find("EnableAnnouncements");
+	if (announcements_enabled != this->world->crafting_config.end())
+	{
+		if (static_cast<std::string>(announcements_enabled->second) == "false")
+		{
+			return; // Announcements disabled
+		}
+	}
+	
+	// Get item name from EIF data
+	std::string item_name = "Unknown Item";
+	if (crafted_item_id > 0 && crafted_item_id < static_cast<int>(this->world->eif->data.size()))
+	{
+		item_name = this->world->eif->data[crafted_item_id].name;
+	}
+	
+	// Check for item-specific announcement message
+	std::string item_key = util::to_string(crafted_item_id) + ".announcement";
+	auto item_announcement = this->world->crafting_config.find(item_key);
+	
+	std::string announcement_template;
+	if (item_announcement != this->world->crafting_config.end())
+	{
+		// Use item-specific announcement
+		announcement_template = static_cast<std::string>(item_announcement->second);
+	}
+	else
+	{
+		// Use default announcement format
+		auto default_format = this->world->crafting_config.find("AnnouncementFormat");
+		if (default_format != this->world->crafting_config.end())
+		{
+			announcement_template = static_cast<std::string>(default_format->second);
+		}
+		else
+		{
+			// Fallback to hardcoded message
+			announcement_template = "[Crafting] You have successfully crafted {ITEM_NAME}, you have earned {CRAFTING_EXP} Crafting EXP, and {REGULAR_EXP} EXP!";
+		}
+	}
+	
+	// Parse the message template with variables
+	std::string announcement = ParseCraftingMessage(announcement_template, item_name, crafting_exp_reward, regular_exp_reward);
+	
+	this->ServerMsg(announcement);
 }
 
 Character::~Character()

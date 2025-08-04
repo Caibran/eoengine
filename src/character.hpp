@@ -183,6 +183,9 @@ class Character : public Command_Source
 		Direction direction;
 		unsigned char level;
 		int exp;
+		unsigned char crafting_level;
+		int crafting_exp;
+		int crafting_exp_tnl;
 		short hp, tp;
 		short str, intl, wis, agi, con, cha;
 		short adj_str, adj_intl, adj_wis, adj_agi, adj_con, adj_cha;
@@ -378,6 +381,13 @@ class Character : public Command_Source
 		std::string SourceName() const;
 		Character* SourceCharacter();
 		World* SourceWorld();
+
+		// Crafting system methods
+		void GiveCraftingEXP(int amount);
+		int CalculateCraftingEXPReward(int crafted_item_id);
+		int CalculateRegularEXPReward(int crafted_item_id);
+		void AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, int regular_exp_reward);
+		std::string ParseCraftingMessage(const std::string& message, const std::string& item_name, int crafting_exp, int regular_exp);
 
 		~Character();
 

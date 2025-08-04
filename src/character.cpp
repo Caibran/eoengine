@@ -2233,17 +2233,22 @@ int Character::CalculateCraftingEXPReward(int crafted_item_id)
 	
 	if (crafting_exp_setting != this->world->crafting_config.end())
 	{
-		return static_cast<int>(crafting_exp_setting->second);
+		int exp_reward = static_cast<int>(crafting_exp_setting->second);
+		Console::Dbg("Using item-specific crafting EXP for item %d: %d", crafted_item_id, exp_reward);
+		return exp_reward;
 	}
 	
 	// Use default crafting EXP if item-specific setting not found
 	auto default_setting = this->world->crafting_config.find("DefaultCraftingEXP");
 	if (default_setting != this->world->crafting_config.end())
 	{
-		return static_cast<int>(default_setting->second);
+		int exp_reward = static_cast<int>(default_setting->second);
+		Console::Dbg("Using default crafting EXP for item %d: %d", crafted_item_id, exp_reward);
+		return exp_reward;
 	}
 	
 	// Fallback to hardcoded value if config not found
+	Console::Dbg("Using hardcoded crafting EXP for item %d: 70", crafted_item_id);
 	return 70;
 }
 

@@ -399,7 +399,18 @@ void World::Initialize()
 		this->home_config.Read(this->config["HomeFile"]);
 		this->skills_config.Read(this->config["SkillsFile"]);
 		this->speech_config.Read(this->config["SpeechFile"]);
-		this->crafting_config.Read(this->config["CraftingFile"]);
+		
+		// Load crafting config with specific error handling
+		try
+		{
+			this->crafting_config.Read(this->config["CraftingFile"]);
+			Console::Out("Crafting configuration loaded from: %s", static_cast<std::string>(this->config["CraftingFile"]).c_str());
+		}
+		catch (std::runtime_error &crafting_error)
+		{
+			Console::Wrn("Failed to load crafting config: %s", crafting_error.what());
+			Console::Wrn("Crafting system will use default values");
+		}
 	}
 	catch (std::runtime_error &e)
 	{

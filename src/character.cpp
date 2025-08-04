@@ -385,7 +385,7 @@ Character::Character(std::string name, World *world)
 
 	Database_Result res = this->world->db->Query("SELECT `name`, `title`, `home`, `fiance`, `partner`, `admin`, `class`, `gender`, `race`, `hairstyle`, `haircolor`,"
 		"`map`, `x`, `y`, `direction`, `level`, `exp`, `hp`, `tp`, `str`, `int`, `wis`, `agi`, `con`, `cha`, `statpoints`, `skillpoints`, "
-		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
+		"`karma`, `sitting`, `hidden`, `bankmax`, `goldbank`, `usage`, `crafting_level`, `crafting_exp`, `crafting_exp_tnl`, `inventory`, `bank`, `paperdoll`, `spells`, `guild`, `guild_rank`, `guild_rank_string`, `quest`, `vars`, "
 		"`nointeract` FROM `characters` WHERE `name` = '$'", name.c_str());
 	std::unordered_map<std::string, util::variant> row = res.front();
 
@@ -414,6 +414,10 @@ Character::Character(std::string name, World *world)
 
 	this->level = GetRow<int>(row, "level");
 	this->exp = GetRow<int>(row, "exp");
+
+	this->crafting_level = GetRow<int>(row, "crafting_level");
+	this->crafting_exp = GetRow<int>(row, "crafting_exp");
+	this->crafting_exp_tnl = GetRow<int>(row, "crafting_exp_tnl");
 
 	this->hp = GetRow<int>(row, "hp");
 	this->tp = GetRow<int>(row, "tp");
@@ -2159,12 +2163,12 @@ void Character::Save()
 	this->world->db->Query("UPDATE `characters` SET `title` = '$', `home` = '$', `fiance` = '$', `partner` = '$', `admin` = #, `class` = #, `gender` = #, `race` = #, "
 		"`hairstyle` = #, `haircolor` = #, `map` = #, `x` = #, `y` = #, `direction` = #, `level` = #, `exp` = #, `hp` = #, `tp` = #, "
 		"`str` = #, `int` = #, `wis` = #, `agi` = #, `con` = #, `cha` = #, `statpoints` = #, `skillpoints` = #, `karma` = #, `sitting` = #, `hidden` = #, "
-		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
+		"`nointeract` = #, `bankmax` = #, `goldbank` = #, `usage` = #, `crafting_level` = #, `crafting_exp` = #, `crafting_exp_tnl` = #, `inventory` = '$', `bank` = '$', `paperdoll` = '$', "
 		"`spells` = '$', `guild` = '$', `guild_rank` = #, `guild_rank_string` = '$', `quest` = '$', `vars` = '$' WHERE `name` = '$'",
 		this->title.c_str(), this->home.c_str(), this->fiance.c_str(), this->partner.c_str(), int(this->admin), this->clas, int(this->gender), int(this->race),
 		this->hairstyle, this->haircolor, this->mapid, this->x, this->y, int(this->direction), this->level, this->exp, this->hp, this->tp,
 		this->str, this->intl, this->wis, this->agi, this->con, this->cha, this->statpoints, this->skillpoints, this->karma, int(this->sitting), int(this->hidden),
-		nointeract, this->bankmax, this->goldbank, this->Usage(), ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(),
+		nointeract, this->bankmax, this->goldbank, this->Usage(), this->crafting_level, this->crafting_exp, this->crafting_exp_tnl, ItemSerialize(this->inventory).c_str(), ItemSerialize(this->bank).c_str(),
 		DollSerialize(this->paperdoll).c_str(), SpellSerialize(this->spells).c_str(), (this->guild ? this->guild->tag.c_str() : ""),
 		this->guild_rank, this->guild_rank_string.c_str(), quest_data.c_str(), "", this->real_name.c_str());
 }
@@ -2192,6 +2196,73 @@ Character* Character::SourceCharacter()
 World* Character::SourceWorld()
 {
 	return this->world;
+}
+
+// Crafting system implementation
+void Character::GiveCraftingEXP(int amount)
+{
+	if (amount <= 0) return;
+	
+	this->crafting_exp += amount;
+	
+	// Level up logic - 100 exp per level + 50 exp bonus per level
+	while (this->crafting_level < 100 && this->crafting_exp >= this->crafting_exp_tnl)
+	{
+		this->crafting_exp -= this->crafting_exp_tnl;
+		this->crafting_level++;
+		
+		// Calculate next level requirement: 100 + (level * 50)
+		this->crafting_exp_tnl = 100 + (this->crafting_level * 50);
+		
+		// Send level up message
+		PacketBuilder reply(PACKET_RECOVER, PACKET_REPLY, 7);
+		reply.AddInt(this->crafting_exp);
+		reply.AddShort(this->crafting_level);
+		reply.AddChar(0); // Stat points (not used for crafting)
+		this->Send(reply);
+		
+		this->ServerMsg(this->world->i18n.Format("crafting_level_up", this->crafting_level));
+	}
+}
+
+int Character::CalculateCraftingEXPReward(int crafted_item_id)
+{
+	// Base crafting EXP reward calculation
+	// You can customize this based on item rarity, level requirements, etc.
+	// For now, using a simple formula based on item ID
+	int base_exp = 70; // Base EXP as shown in the example
+	
+	// Could add item-specific bonuses here based on crafted_item_id
+	// For example: rare items give more EXP
+	
+	return base_exp;
+}
+
+int Character::CalculateRegularEXPReward(int crafted_item_id)
+{
+	// Regular EXP reward calculation
+	// Base amount as shown in the example
+	int base_exp = 450;
+	
+	// Could add item-specific bonuses here based on crafted_item_id
+	
+	return base_exp;
+}
+
+void Character::AnnounceCrafting(int crafted_item_id, int crafting_exp_reward, int regular_exp_reward)
+{
+	// Get item name from EIF data
+	std::string item_name = "Unknown Item";
+	if (crafted_item_id > 0 && crafted_item_id < static_cast<int>(this->world->eif->data.size()))
+	{
+		item_name = this->world->eif->data[crafted_item_id].name;
+	}
+	
+	// Create announcement message
+	std::string announcement = util::sprintf("[Crafting] You have successfully crafted %s, you have earned %d Crafting EXP, and %d EXP!",
+		item_name.c_str(), crafting_exp_reward, regular_exp_reward);
+	
+	this->ServerMsg(announcement);
 }
 
 Character::~Character()

@@ -1706,6 +1706,51 @@ bool Map::AttackPK(Character *from, Direction direction)
 
 				if (character->hp == 0)
 				{
+					// Server-wide PK kill announcement
+					PacketBuilder announce_builder(PACKET_TALK, PACKET_SERVER, from->real_name.length() + character->real_name.length() + 13);
+					announce_builder.AddString(from->real_name + " has killed " + character->real_name + "!");
+					
+					UTIL_FOREACH(this->world->characters, announce_character)
+					{
+						announce_character->Send(announce_builder);
+					}
+
+					// Give PK rewards to killer
+					int pk_item_id = static_cast<int>(this->world->config["PKItemID"]);
+					int pk_reward_xp = static_cast<int>(this->world->config["PKRewardXP"]);
+					
+					if (pk_item_id > 0)
+					{
+						from->AddItem(pk_item_id, 1);
+					}
+					
+					if (pk_reward_xp > 0)
+					{
+						from->exp += pk_reward_xp;
+						from->exp = std::min(from->exp, static_cast<int>(this->world->config["MaxExp"]));
+						
+						// Check for level up
+						bool level_up = false;
+						while (from->level < static_cast<int>(this->world->config["MaxLevel"])
+							&& from->exp >= this->world->exp_table[from->level+1])
+						{
+							level_up = true;
+							++from->level;
+							from->statpoints += static_cast<int>(this->world->config["StatPerLevel"]);
+							from->skillpoints += static_cast<int>(this->world->config["SkillPerLevel"]);
+							from->CalculateStats();
+						}
+						
+						if (level_up)
+						{
+							PacketBuilder level_builder(PACKET_RECOVER, PACKET_REPLY, 7);
+							level_builder.AddInt(from->exp);
+							level_builder.AddShort(from->level);
+							level_builder.AddChar(from->statpoints);
+							from->Send(level_builder);
+						}
+					}
+
 					character->DeathRespawn();
 
 					UTIL_FOREACH(from->quests, q)
@@ -2080,18 +2125,63 @@ void Map::SpellAttackPK(Character *from, Character *victim, unsigned short spell
 				character->Send(builder);
 		}
 
-		if (victim->hp == 0)
+	if (victim->hp == 0)
+	{
+		// Server-wide PK kill announcement
+		PacketBuilder announce_builder(PACKET_TALK, PACKET_SERVER, from->real_name.length() + victim->real_name.length() + 13);
+		announce_builder.AddString(from->real_name + " has killed " + victim->real_name + "!");
+		
+		UTIL_FOREACH(this->world->characters, announce_character)
 		{
-			victim->DeathRespawn();
+			announce_character->Send(announce_builder);
+		}
 
-			UTIL_FOREACH(from->quests, q)
+		// Give PK rewards to killer
+		int pk_item_id = static_cast<int>(this->world->config["PKItemID"]);
+		int pk_reward_xp = static_cast<int>(this->world->config["PKRewardXP"]);
+		
+		if (pk_item_id > 0)
+		{
+			from->AddItem(pk_item_id, 1);
+		}
+		
+		if (pk_reward_xp > 0)
+		{
+			from->exp += pk_reward_xp;
+			from->exp = std::min(from->exp, static_cast<int>(this->world->config["MaxExp"]));
+			
+			// Check for level up
+			bool level_up = false;
+			while (from->level < static_cast<int>(this->world->config["MaxLevel"])
+				&& from->exp >= this->world->exp_table[from->level+1])
 			{
-				if (!q.second || q.second->GetQuest()->Disabled())
-					continue;
-
-				q.second->KilledPlayer();
+				level_up = true;
+				++from->level;
+				from->statpoints += static_cast<int>(this->world->config["StatPerLevel"]);
+				from->skillpoints += static_cast<int>(this->world->config["SkillPerLevel"]);
+				from->CalculateStats();
+			}
+			
+			if (level_up)
+			{
+				PacketBuilder level_builder(PACKET_RECOVER, PACKET_REPLY, 7);
+				level_builder.AddInt(from->exp);
+				level_builder.AddShort(from->level);
+				level_builder.AddChar(from->statpoints);
+				from->Send(level_builder);
 			}
 		}
+
+		victim->DeathRespawn();
+
+		UTIL_FOREACH(from->quests, q)
+		{
+			if (!q.second || q.second->GetQuest()->Disabled())
+				continue;
+
+			q.second->KilledPlayer();
+		}
+	}
 
 		builder.Reset(4);
 		builder.SetID(PACKET_RECOVER, PACKET_PLAYER);

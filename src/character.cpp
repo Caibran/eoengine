@@ -1291,6 +1291,24 @@ void Character::Warp(short map, unsigned char x, unsigned char y, WarpAnimation 
 
 	this->Send(builder);
 
+	// Check if entering a PK-enabled map and send warning
+	bool is_pk_map = false;
+	if (this->world->config["GlobalPK"] && !this->world->PKExcept(this->mapid))
+	{
+		is_pk_map = true;
+	}
+	else if (this->map->pk)
+	{
+		is_pk_map = true;
+	}
+	
+	if (is_pk_map)
+	{
+		PacketBuilder pk_warning(PACKET_TALK, PACKET_SERVER, 47);
+		pk_warning.AddString("[WARNING] You have entered a PK map, be careful.");
+		this->Send(pk_warning);
+	}
+
 	if (this->arena)
 	{
 		--this->arena->occupants;
